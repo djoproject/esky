@@ -451,26 +451,29 @@ def is_core_dependency(filenm):
     return False
 
 
-def copy_ownership_info(src,dst,cur="",default=None):
+def copy_ownership_info(src, dst, cur="", default=None):
     """Copy file ownership from src onto dst, as much as possible."""
     # TODO: how on win32?
-    source = os.path.join(src,cur)
-    target = os.path.join(dst,cur)
+    source = os.path.join(src, cur)
+    target = os.path.join(dst, cur)
     if default is None:
         default = os.stat(src)
+    is_symlink = os.path.islink(source)
     if os.path.exists(source):
-        info = os.stat(source)
+        if is_symlink:
+            info = os.lstat(source)
+        else:
+            info = os.stat(source)
     else:
         info = default
     if sys.platform != "win32":
-        if sys.version_info[:2] < (3, 3):
-            os.chown(target,info.st_uid,info.st_gid)
+        if is_symlink:
+            os.lchown(target, info.st_uid, info.st_gid)
         else:
-            os.chown(target,info.st_uid,info.st_gid, follow_symlinks=False)
+            os.chown(target, info.st_uid, info.st_gid)
     if os.path.isdir(target):
         for nm in os.listdir(target):
-            copy_ownership_info(src,dst,os.path.join(cur,nm),default)
-
+            copy_ownership_info(src, dst, os.path.join(cur, nm), default)
 
 
 def get_backup_filename(filename):
