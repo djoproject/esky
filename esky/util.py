@@ -411,6 +411,10 @@ def create_zipfile(source,target,get_zipinfo=None,members=None,compress=None):
                 zf.write(fpath,fpath[len(source)+1:])
             elif isinstance(zinfo,basestring):
                 zf.write(fpath,zinfo)
+            elif fpath.endswith('/'):
+                zinfo = zipfile.ZipInfo(fpath[len(source)+1:])
+                zinfo.external_attr = 16
+                zf.writestr(zinfo,'')
             else:
                 with open(fpath,"rb") as f:
                     zf.writestr(zinfo,f.read())
@@ -474,6 +478,25 @@ def copy_ownership_info(src, dst, cur="", default=None):
     if os.path.isdir(target):
         for nm in os.listdir(target):
             copy_ownership_info(src, dst, os.path.join(cur, nm), default)
+
+
+def copy_ownership_info_for_symlink(src, dst, cur="", default=None):
+    """Copy file ownership from src onto dst, only for symlinks"""
+    source = os.path.join(src, cur)
+    target = os.path.join(dst, cur)
+    if default is None:
+        default = os.stat(src)
+    if os.path.islink(source) :
+        if os.path.exists(source):
+            info = os.lstat(source)
+        else:
+            info = default
+
+        os.lchown(target, info.st_uid, info.st_gid)
+    elif os.path.isdir(target):
+        for nm in os.listdir(target):
+            copy_ownership_info_for_symlink(
+                src, dst, os.path.join(cur, nm), default)
 
 
 def get_backup_filename(filename):

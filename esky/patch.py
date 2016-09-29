@@ -400,25 +400,38 @@ def paths_differ(path1,path2):
         return True
     return False
 
-    
 
-def calculate_digest(target,hash=hashlib.md5):
+def _digest_file(digest, target):
+    with open(target,"rb") as f:
+        data = f.read(1024*16)
+        while data:
+            digest.update(data)
+            data = f.read(1024*16)
+
+
+def calculate_digest(target, hash=hashlib.md5):
     """Calculate the digest of the given path.
 
     If the target is a file, its digest is calculated as normal.  If it is
     a directory, it is calculated from the names and digests of its contents.
+    If it is a zip, it is calculated from the names and CRCs of its contents.
     """
     d = hash()
     if os.path.isdir(target):
         for nm in sorted(os.listdir(target)):
             d.update(nm.encode("utf8"))
-            d.update(calculate_digest(os.path.join(target,nm)))
+            d.update(calculate_digest(os.path.join(target,nm)))   
+    elif target.lower().endswith('.zip'):
+        try:
+            with zipfile.ZipFile(target, 'r') as z:
+                for info in sorted(z.infolist(), key=lambda x: x.filename):
+                    d.update(info.filename)
+                    d.update(str(info.CRC).encode('utf-8'))
+        except zipfile.BadZipfile:
+            _digest_file(d, target)
     else:
-        with open(target,"rb") as f:
-            data = f.read(1024*16)
-            while data:
-                d.update(data)
-                data = f.read(1024*16)
+        _digest_file(d, target)
+
     return d.digest()
 
 

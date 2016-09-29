@@ -21,13 +21,15 @@ import zipfile
 import shutil
 import tempfile
 import errno
+import sys
 from urlparse import urlparse, urljoin
 
 from esky.bootstrap import join_app_version
 from esky.errors import *
 from esky.util import deep_extract_zipfile, copy_ownership_info, \
                       ESKY_CONTROL_DIR, ESKY_APPDATA_DIR, \
-                      really_rmtree, really_rename
+                      really_rmtree, really_rename, \
+                      copy_ownership_info_for_symlink
 from esky.patch import apply_patch, PatchError
 
 
@@ -419,7 +421,12 @@ class DefaultVersionFinder(VersionFinder):
         except OSError, e:
             if e.errno not in (errno.EEXIST,183):
                 raise
-        shutil.copytree(source,os.path.join(dest,best_vdir))
+        shutil.copytree(source, os.path.join(dest, best_vdir), symlinks=True)
+        python_2 = sys.version_info[0] < 3
+        if python_2:
+            # not needed with python3, copytree manage the ownership info
+            # of the symlinks
+            copy_ownership_info_for_symlink(dest, best_vdir)
         mfstnm = os.path.join(source,ESKY_CONTROL_DIR,"bootstrap-manifest.txt")
         with open(mfstnm,"r") as manifest:
             for nm in manifest:
@@ -427,11 +434,21 @@ class DefaultVersionFinder(VersionFinder):
                 bspath = os.path.join(app.appdir,nm)
                 dstpath = os.path.join(uppath,nm)
                 if os.path.isdir(bspath):
-                    shutil.copytree(bspath,dstpath)
+                    shutil.copytree(bspath, dstpath, symlinks=True)
+                    if python_2:
+                        # not needed with python3, copytree manage the
+                        # ownership info of the symlinks
+                        copy_ownership_info_for_symlink(bspath, dstpath)
                 else:
                     if not os.path.isdir(os.path.dirname(dstpath)):
                         os.makedirs(os.path.dirname(dstpath))
-                    shutil.copy2(bspath,dstpath)
+                    if os.path.islink(bspath):
+                        linkto = os.readlink(bspath)
+                        os.symlink(linkto, dstpath)
+                        info = os.lstat(bspath)
+                        os.lchown(dstpath, info.st_uid, info.st_gid)
+                    else:
+                        shutil.copy2(bspath, dstpath)
 
     def has_version(self,app,version):
         path = self._ready_name(app,version)
