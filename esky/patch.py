@@ -423,10 +423,13 @@ def calculate_digest(target, hash=hashlib.md5):
             d.update(calculate_digest(os.path.join(target,nm)))   
     elif target.lower().endswith('.zip'):
         try:
-            with zipfile.ZipFile(target, 'r') as z:
+            z=zipfile.ZipFile(target, 'r')
+            try:
                 for info in sorted(z.infolist(), key=lambda x: x.filename):
                     d.update(info.filename)
                     d.update(str(info.CRC).encode('utf-8'))
+            finally:
+                z.close()
         except zipfile.BadZipfile:
             _digest_file(d, target)
     else:
